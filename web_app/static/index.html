@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>A–E 分级规则测试台</title>
+</head>
+<body>
+<main id="rule-lab">
+  <header class="hero">
+    <div>
+      <p class="eyebrow">LOCAL RULE LAB</p>
+      <h1>A–E 分级规则测试台</h1>
+      <p class="subtitle">空白即“病历未提及”。输入数值或选择答案后，该变量的 JSON 会立即生成。</p>
+    </div>
+    <div class="status-dot"><span></span>本地运行 · 不保存数据</div>
+  </header>
+
+  <section class="preset-bar" aria-label="预置病例">
+    <div>
+      <strong>快速案例</strong>
+      <span>一键填入代表性条件</span>
+    </div>
+    <div id="preset-buttons" class="preset-buttons"></div>
+    <button id="clear-all" class="ghost-button" type="button">全部清空</button>
+  </section>
+
+  <div class="workspace">
+    <form id="case-form" class="form-column"></form>
+
+    <aside class="result-column">
+      <section class="result-card" aria-live="polite">
+        <p class="result-label">判断结果</p>
+        <div id="grade-display" class="grade-display">—</div>
+        <p id="result-hint" class="result-hint">填写条件后点击开始分级</p>
+        <button id="classify-button" class="primary-button" type="button">开始分级</button>
+      </section>
+
+      <details class="panel" open>
+        <summary>生成的完整 JSON</summary>
+        <div class="panel-actions">
+          <span>空白项自动生成未提及事实</span>
+          <button id="copy-json" type="button">复制</button>
+        </div>
+        <pre id="json-preview"></pre>
+      </details>
+
+      <details class="panel">
+        <summary>结构说明</summary>
+        <div class="explanation">
+          <p><strong>填写或选择</strong>：病历提及，该值参与规则判断。</p>
+          <p><strong>保持空白</strong>：自动生成 <code>value: null</code>、<code>mentioned: false</code>。</p>
+          <p>布尔变量选择“否”表示病历明确提到且为阴性；再次点击已选答案可清空。</p>
+          <p>证据在测试模式下自动填写为“网页测试输入”。</p>
+        </div>
+      </details>
+    </aside>
+  </div>
+</main>
+
+<style>
+  :root { color-scheme: light; font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif; background:#f3f6f8; color:#15252d; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:linear-gradient(180deg,#e9f1f3 0,#f5f7f8 280px); }
+  button,input,select { font:inherit; }
+  #rule-lab { width:min(1500px,calc(100% - 40px)); margin:0 auto; padding:34px 0 80px; }
+  .hero { display:flex; align-items:flex-end; justify-content:space-between; gap:24px; margin-bottom:24px; }
+  .eyebrow { margin:0 0 8px; color:#18746f; font-size:12px; font-weight:800; letter-spacing:.16em; }
+  h1 { margin:0; font-family:Georgia,"Songti SC",serif; font-size:clamp(34px,5vw,58px); line-height:1; letter-spacing:-.04em; color:#16353b; }
+  .subtitle { margin:14px 0 0; color:#587078; }
+  .status-dot { display:flex; align-items:center; gap:9px; padding:10px 14px; border:1px solid #c9d9dc; border-radius:999px; background:rgba(255,255,255,.7); color:#526970; font-size:13px; white-space:nowrap; }
+  .status-dot span { width:8px; height:8px; border-radius:50%; background:#1f9d7a; box-shadow:0 0 0 4px #d9f1e9; }
+  .preset-bar { display:flex; align-items:center; gap:18px; padding:16px 18px; border:1px solid #d6e1e3; border-radius:16px; background:#fff; box-shadow:0 8px 28px rgba(31,61,69,.06); margin-bottom:20px; }
+  .preset-bar>div:first-child { min-width:108px; }
+  .preset-bar strong,.preset-bar span { display:block; }
+  .preset-bar span { font-size:12px; color:#71848a; margin-top:3px; }
+  .preset-buttons { display:flex; gap:8px; flex:1; flex-wrap:wrap; }
+  .preset-buttons button,.ghost-button,.panel-actions button { border:1px solid #cad9dc; background:#f7fafb; color:#254850; border-radius:9px; padding:8px 11px; cursor:pointer; }
+  .preset-buttons button:hover,.ghost-button:hover,.panel-actions button:hover { border-color:#24847e; color:#176a65; }
+  .workspace { display:grid; grid-template-columns:minmax(0,1fr) 380px; gap:20px; align-items:start; }
+  .form-column { display:grid; gap:16px; }
+  .group-card { border:1px solid #d6e1e3; border-radius:17px; background:#fff; overflow:hidden; box-shadow:0 8px 24px rgba(31,61,69,.05); }
+  .group-header { padding:17px 20px; background:#f8fbfb; border-bottom:1px solid #e1e9eb; display:flex; justify-content:space-between; align-items:center; }
+  .group-header h2 { margin:0; font-size:17px; color:#173b42; }
+  .group-header span { font-size:12px; color:#7a8d92; }
+  .fields-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .field-row { min-height:146px; padding:16px 18px; border-bottom:1px solid #edf1f2; }
+  .field-row:nth-child(odd) { border-right:1px solid #edf1f2; }
+  .field-top { display:flex; justify-content:space-between; gap:12px; align-items:center; margin-bottom:10px; }
+  .field-label { font-size:14px; font-weight:700; color:#233f46; }
+  .field-clear { border:0; background:transparent; color:#839398; padding:2px 0; font-size:11px; cursor:pointer; }
+  .field-clear:hover { color:#17746e; }
+  .field-content { display:grid; grid-template-columns:minmax(0,1fr) minmax(190px,.92fr); gap:10px; align-items:stretch; }
+  .input-line { display:flex; gap:8px; align-items:center; }
+  .input-line input[type=number],.input-line select { width:100%; height:38px; border:1px solid #cbd8da; border-radius:9px; background:#fff; padding:0 10px; color:#17353b; }
+  .input-line input::placeholder { color:#a4b0b3; }
+  .unit { min-width:58px; color:#71848a; font-size:12px; }
+  .random-button { height:38px; border:1px solid #c4d7d9; background:#eaf5f4; color:#1c746f; border-radius:9px; padding:0 10px; cursor:pointer; white-space:nowrap; }
+  .boolean-choice { display:grid; grid-template-columns:1fr 1fr; width:100%; border:1px solid #cbd8da; border-radius:9px; overflow:hidden; }
+  .boolean-choice button { height:36px; border:0; background:#fff; color:#63787e; cursor:pointer; }
+  .boolean-choice button+button { border-left:1px solid #d9e2e4; }
+  .boolean-choice button.active { background:#1f817a; color:#fff; }
+  .field-json { margin:0; min-height:74px; max-height:none; padding:9px 10px; border:1px solid #d8e4e5; border-radius:9px; background:#f5f9f9; color:#47666c; font:10px/1.42 ui-monospace,SFMono-Regular,Menlo,monospace; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; }
+  .field-row.is-mentioned .field-json { border-color:#9fcac5; background:#eaf6f3; color:#17665f; }
+  .result-column { position:sticky; top:18px; display:grid; gap:14px; }
+  .result-card { padding:24px; border-radius:19px; background:#143a40; color:#fff; box-shadow:0 18px 42px rgba(19,57,63,.2); }
+  .result-label { margin:0; color:#9cc5c5; font-size:12px; letter-spacing:.12em; }
+  .grade-display { min-height:82px; display:flex; align-items:center; flex-wrap:wrap; gap:8px; font-family:Georgia,serif; font-size:32px; line-height:1.15; color:#ecfff8; }
+  .grade-chip { display:inline-flex; padding:8px 11px; border:1px solid rgba(236,255,248,.35); border-radius:10px; background:rgba(255,255,255,.08); }
+  .result-hint { min-height:38px; margin:4px 0 18px; color:#b6ced1; font-size:13px; line-height:1.5; }
+  .primary-button { width:100%; height:46px; border:0; border-radius:11px; background:#f2c65d; color:#263a36; font-weight:800; cursor:pointer; }
+  .primary-button:hover { background:#ffd879; }
+  .panel { border:1px solid #d6e1e3; border-radius:15px; background:#fff; overflow:hidden; }
+  .panel summary { padding:15px 17px; cursor:pointer; font-weight:700; color:#29484f; }
+  .panel-actions { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:0 14px 10px; color:#7a8b90; font-size:11px; }
+  pre { margin:0; padding:14px; max-height:390px; overflow:auto; border-top:1px solid #edf1f2; background:#102c31; color:#c8ebe2; font:11px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace; }
+  .explanation { padding:0 17px 14px; color:#667a80; font-size:13px; line-height:1.55; }
+  code { background:#eaf0f1; padding:2px 5px; border-radius:4px; color:#34555d; }
+  .error { color:#ffb7aa; }
+  @media(max-width:1000px){ .workspace{grid-template-columns:1fr}.result-column{position:static;grid-row:1}.fields-grid{grid-template-columns:1fr}.field-row:nth-child(odd){border-right:0}.hero{align-items:flex-start;flex-direction:column}.preset-bar{align-items:flex-start;flex-wrap:wrap}.ghost-button{margin-left:auto} }
+  @media(max-width:600px){ #rule-lab{width:min(100% - 24px,1500px);padding-top:22px}.preset-bar{gap:12px}.preset-buttons{order:3;width:100%}.field-row{padding:14px}.field-content{grid-template-columns:1fr}.grade-display{font-size:60px} }
+</style>
+
+<script>
+(() => {
+  const root = document.getElementById('rule-lab');
+  const form = document.getElementById('case-form');
+  const preview = document.getElementById('json-preview');
+  const gradeDisplay = document.getElementById('grade-display');
+  const resultHint = document.getElementById('result-hint');
+  let config;
+  const state = {};
+
+  const missingFact = () => ({ value: null, mentioned: false, evidence: null });
+  const presentFact = value => ({ value, mentioned: true, evidence: '网页测试输入' });
+
+  function buildPayload() {
+    const payload = {};
+    config.groups.forEach(group => group.fields.forEach(field => {
+      const current = state[field.name];
+      payload[field.name] = current?.mentioned ? presentFact(current.value) : missingFact();
+    }));
+    return payload;
+  }
+
+  function refreshPreview() {
+    preview.textContent = JSON.stringify(buildPayload(), null, 2);
+    config.groups.forEach(group => group.fields.forEach(field => refreshFieldJson(field.name)));
+  }
+
+  function refreshFieldJson(name) {
+    const row = root.querySelector(`[data-field="${name}"]`);
+    if (!row) return;
+    const fact = state[name]?.mentioned ? presentFact(state[name].value) : missingFact();
+    row.querySelector('.field-json').textContent = JSON.stringify({ [name]: fact }, null, 2);
+    row.classList.toggle('is-mentioned', fact.mentioned);
+  }
+
+  function randomValue(field) {
+    const steps = Math.round((field.max - field.min) / field.step);
+    const raw = field.min + Math.floor(Math.random() * (steps + 1)) * field.step;
+    const decimals = String(field.step).includes('.') ? String(field.step).split('.')[1].length : 0;
+    return Number(raw.toFixed(decimals));
+  }
+
+  function renderField(field) {
+    state[field.name] = { mentioned: false, value: null };
+    const row = document.createElement('div');
+    row.className = 'field-row';
+    row.dataset.field = field.name;
+    row.innerHTML = `<div class="field-top"><span class="field-label">${field.label}</span><button class="field-clear" type="button">清空 · 未提及</button></div><div class="field-content"><div class="input-line"></div><pre class="field-json" aria-label="${field.label} JSON"></pre></div>`;
+    const line = row.querySelector('.input-line');
+
+    if (field.type === 'number') {
+      line.innerHTML = `<input type="number" min="${field.min}" max="${field.max}" step="${field.step}" placeholder="未填写" aria-label="${field.label}"><span class="unit">${field.unit}</span><button class="random-button" type="button">随机</button>`;
+      const input = line.querySelector('input');
+      const random = line.querySelector('button');
+      input.addEventListener('input', () => {
+        state[field.name].mentioned = input.value !== '';
+        state[field.name].value = input.value === '' ? null : Number(input.value);
+        refreshPreview();
+      });
+      random.addEventListener('click', () => {
+        state[field.name].mentioned = true;
+        state[field.name].value = randomValue(field);
+        input.value = state[field.name].value;
+        refreshPreview();
+      });
+    } else if (field.type === 'boolean') {
+      line.innerHTML = `<div class="boolean-choice"><button type="button" data-value="true">是</button><button type="button" data-value="false">否</button></div>`;
+      const choice = line.querySelector('.boolean-choice');
+      choice.querySelectorAll('button').forEach(button => button.addEventListener('click', () => {
+        const wasActive = button.classList.contains('active');
+        state[field.name].mentioned = !wasActive;
+        state[field.name].value = wasActive ? null : button.dataset.value === 'true';
+        choice.querySelectorAll('button').forEach(item => item.classList.toggle('active', !wasActive && item === button));
+        refreshPreview();
+      }));
+    } else {
+      const options = Object.entries(field.options).map(([value,label]) => `<option value="${value}">${label}</option>`).join('');
+      line.innerHTML = `<select aria-label="${field.label}"><option value="">未选择（病历未提及）</option>${options}</select>`;
+      const select = line.querySelector('select');
+      select.addEventListener('change', () => {
+        state[field.name].mentioned = select.value !== '';
+        state[field.name].value = select.value || null;
+        refreshPreview();
+      });
+    }
+    row.querySelector('.field-clear').addEventListener('click', () => clearField(field.name));
+    return row;
+  }
+
+  function renderForm() {
+    config.groups.forEach(group => {
+      const section = document.createElement('section');
+      section.className = 'group-card';
+      section.innerHTML = `<div class="group-header"><h2>${group.name}</h2><span>${group.fields.length} 个变量</span></div><div class="fields-grid"></div>`;
+      const grid = section.querySelector('.fields-grid');
+      group.fields.forEach(field => grid.appendChild(renderField(field)));
+      form.appendChild(section);
+    });
+  }
+
+  function clearField(name) {
+    const row = root.querySelector(`[data-field="${name}"]`);
+    state[name] = { mentioned: false, value: null };
+    const input = row.querySelector('input[type=number],select');
+    if (input) input.value = '';
+    row.querySelectorAll('.boolean-choice button').forEach(button => button.classList.remove('active'));
+    refreshPreview();
+  }
+
+  function clearAll() {
+    Object.keys(state).forEach(name => {
+      state[name] = { mentioned: false, value: null };
+      const row = root.querySelector(`[data-field="${name}"]`);
+      const input = row.querySelector('input[type=number],select');
+      if (input) input.value = '';
+      row.querySelectorAll('.boolean-choice button').forEach(button => button.classList.remove('active'));
+    });
+    gradeDisplay.textContent = '—';
+    resultHint.textContent = '填写条件后点击开始分级';
+    resultHint.classList.remove('error');
+    refreshPreview();
+  }
+
+  function applyPreset(values) {
+    clearAll();
+    Object.entries(values).forEach(([name,value]) => {
+      const row = root.querySelector(`[data-field="${name}"]`);
+      if (!row) return;
+      state[name].mentioned = true;
+      state[name].value = value;
+      if (typeof value === 'boolean') {
+        const choice = row.querySelector('.boolean-choice');
+        choice.querySelectorAll('button').forEach(button => button.classList.toggle('active', button.dataset.value === String(value)));
+      } else {
+        const input = row.querySelector('input[type=number],select');
+        input.value = value;
+      }
+    });
+    refreshPreview();
+  }
+
+  async function classifyCase() {
+    resultHint.classList.remove('error');
+    resultHint.textContent = '正在计算…';
+    try {
+      const response = await fetch('/api/classify', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(buildPayload()) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || '规则计算失败');
+      const labels = result.results.map(item => item.has_r ? `${item.grade}-R` : item.grade);
+      gradeDisplay.innerHTML = labels.map(label => `<span class="grade-chip">${label}</span>`).join('');
+      resultHint.textContent = `共 ${labels.length} 种可区分结果：${JSON.stringify(result)}`;
+    } catch (error) {
+      gradeDisplay.textContent = '!';
+      resultHint.textContent = error.message;
+      resultHint.classList.add('error');
+    }
+  }
+
+  fetch('/api/config').then(response => response.json()).then(data => {
+    config = data;
+    renderForm();
+    Object.entries(config.presets).forEach(([name,values]) => {
+      const button = document.createElement('button');
+      button.type = 'button'; button.textContent = name;
+      button.addEventListener('click', () => applyPreset(values));
+      document.getElementById('preset-buttons').appendChild(button);
+    });
+    refreshPreview();
+  });
+
+  document.getElementById('classify-button').addEventListener('click', classifyCase);
+  document.getElementById('clear-all').addEventListener('click', clearAll);
+  document.getElementById('copy-json').addEventListener('click', async event => {
+    await navigator.clipboard.writeText(preview.textContent);
+    const original = event.target.textContent; event.target.textContent = '已复制';
+    setTimeout(() => event.target.textContent = original, 1200);
+  });
+})();
+</script>
+</body>
+</html>
