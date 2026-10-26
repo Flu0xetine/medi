@@ -10,21 +10,20 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from ae_grading import FIELD_SPECS
-from ae_workflow import build_grading_graph, grade_medical_record
+from medi.grading import FIELD_SPECS
+from medi.workflow import analyze_medical_record, build_grading_graph, grade_medical_record
 
 
 def complete_facts(**present_values) -> dict:
     """生成所有条件均明确的确定性测试事实表。"""
 
     safe_numbers = {
-        "age_years": 80, "spesi_systolic_bp_mmhg": 100, "heart_rate_bpm": 109,
-        "spo2_percent": 90, "hypotension_systolic_bp_mmhg": 90,
+        "body_temperature_c": 36, "age_years": 80, "systolic_bp_mmhg": 100, "heart_rate_bpm": 109,
+        "spo2_percent": 90, "diastolic_bp_mmhg": 80,
         "sbp_below_90_duration_minutes": 15, "systolic_bp_drop_mmhg": 40,
         "sbp_drop_gt_40_duration_minutes": 15, "lactate_mmol_l": 2,
-        "urine_output_ml_kg_h": 0.5, "cardiac_index_l_min_m2": 2.2,
-        "mean_arterial_pressure_mmhg": 60, "respiratory_rate_bpm": 29,
-        "nasal_cannula_flow_l_min": 6,
+        "respiratory_rate_bpm": 29,
+        "nasal_cannula_over_6_l_min": False,
     }
     values = {}
     for name, spec in FIELD_SPECS.items():
@@ -34,8 +33,6 @@ def complete_facts(**present_values) -> dict:
             values[name] = spec.allowed_values[0]
         else:
             values[name] = safe_numbers[name]
-    # 明确存在低灌注可稳定排除 D1 基线路径。
-    values["hypoperfusion_or_end_organ_damage"] = True
     values.update(present_values)
     facts = {}
     for name, value in values.items():
@@ -87,8 +84,18 @@ class SequenceReviewer:
 
 
 class WorkflowTests(unittest.TestCase):
+    def test_analysis_exposes_editable_facts_and_review(self) -> None:
+        facts = complete_facts(age_years=86)
+        result = analyze_medical_record(
+            "测试病历", SequenceExtractor([facts]), SequenceReviewer([True])
+        )
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["facts"], facts)
+        self.assertTrue(result["review"]["approved"])
+        self.assertTrue(result["results"])
+
     def test_approved_extraction_goes_directly_to_engine(self) -> None:
-        extractor = SequenceExtractor([complete_facts(age_years=81)])
+        extractor = SequenceExtractor([complete_facts(age_years=86)])
         reviewer = SequenceReviewer([True])
 
         result = grade_medical_record("测试病历", extractor, reviewer)
@@ -141,6 +148,52 @@ class WorkflowTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "error")
         self.assertIn("缺少输入变量", result["error"])
+
+    def test_multiple_engine_results_are_forwarded_in_stable_order(self) -> None:
+        facts = complete_facts()
+        facts["age_years"] = {
+            "value": None,
+            "mentioned": False,
+            "evidence": None,
+        }
+        extractor = SequenceExtractor([facts])
+        reviewer = SequenceReviewer([True])
+
+        result = grade_medical_record("年龄未记录", extractor, reviewer)
+
+        self.assertEqual(
+            result,
+            {
+                "status": "completed",
+                "results": [
+                    {"grade": "C1", "has_r": False},
+                    {"grade": "B1", "has_r": False},
+                ],
+            },
+        )
+
+    def test_agent_exceptions_propagate_to_caller(self) -> None:
+        def failing_extractor(request: dict) -> dict:
+            raise RuntimeError("extract failed")
+
+        def failing_reviewer(request: dict) -> dict:
+            raise RuntimeError("review failed")
+
+        with self.subTest(agent="extractor"):
+            with self.assertRaisesRegex(RuntimeError, "extract failed"):
+                grade_medical_record(
+                    "测试病历",
+                    failing_extractor,
+                    SequenceReviewer([True]),
+                )
+
+        with self.subTest(agent="reviewer"):
+            with self.assertRaisesRegex(RuntimeError, "review failed"):
+                grade_medical_record(
+                    "测试病历",
+                    SequenceExtractor([complete_facts()]),
+                    failing_reviewer,
+                )
 
 
 if __name__ == "__main__":

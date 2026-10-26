@@ -1,13 +1,33 @@
 [project]
 name = "ae-grading-engine"
-version = "2.0.0"
+version = "2.2.0"
 description = "确定性的 A–E 临床分级规则引擎"
 requires-python = ">=3.10"
 dependencies = [
+    "fastapi>=0.115,<1.0",
+    "uvicorn>=0.30,<1.0",
+    "python-multipart>=0.0.9,<1.0",
+    "pymupdf>=1.24,<2.0",
+    "httpx>=0.27,<1.0",
     "langgraph>=1.0,<2.0",
     "openai>=2.0,<3.0",
+    "pydantic>=2.0,<3.0",
     "python-dotenv>=1.0,<2.0",
 ]
+
+[project.scripts]
+medi = "medi.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["medi*"]
+exclude = ["cases*", "tests*"]
+
+[tool.setuptools.package-data]
+"medi.web" = ["static/*.html", "static/*.js", "static/*.css"]
 
 [tool.unittest]
 start-directory = "tests"
